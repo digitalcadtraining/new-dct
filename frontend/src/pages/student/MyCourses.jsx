@@ -58,7 +58,7 @@ function CourseCard({ enrollment, index }) {
         </div>
         <div style={{ display:"flex", gap:8 }}>
           <Link to="/student/sessions/all" style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:4, padding:"9px 0", background:`linear-gradient(135deg,${C.blue},${C.primary})`, color:"#fff", borderRadius:9, fontSize:12, fontWeight:700, textDecoration:"none" }}>Sessions <ChevronRight size={12}/></Link>
-          <Link to="/student/syllabus" style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:4, padding:"9px 0", background:"#eff8ff", color:C.primary, borderRadius:9, fontSize:12, fontWeight:700, textDecoration:"none", border:"1px solid #bfdbfe" }}>Syllabus <ChevronRight size={12}/></Link>
+          <Link to="/student/assignments/all" style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:4, padding:"9px 0", background:"#eff8ff", color:C.primary, borderRadius:9, fontSize:12, fontWeight:700, textDecoration:"none", border:"1px solid #bfdbfe" }}>Assignments <ChevronRight size={12}/></Link>
         </div>
       </div>
     </motion.div>

@@ -336,4 +336,5 @@ module.exports = {
   listPendingBatches,
   approveBatch,
   rejectBatch,
+  resolveQuery,
 };

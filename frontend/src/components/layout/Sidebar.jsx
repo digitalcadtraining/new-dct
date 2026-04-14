@@ -34,7 +34,6 @@ const STUDENT_NAV = [
       { label: "Assignments Feedback", to: "/student/assignments/feedback" },
     ],
   },
-  { label: "Syllabus", icon: BookOpen, to: "/student/syllabus" },
   { label: "My Queries", icon: HelpCircle, to: "/student/queries" },
 ];
 

@@ -18,6 +18,7 @@ router.post("/batches/:id/approve",        admin.approveBatch);
 router.post("/batches/:id/reject",         admin.rejectBatch);
 
 router.get("/queries",                     admin.listAllQueries);
+router.patch("/queries/:id/resolve",       admin.resolveQuery);
 router.patch("/users/:id/status",          admin.toggleUserStatus);
 
 module.exports = router;
