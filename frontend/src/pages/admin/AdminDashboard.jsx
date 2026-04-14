@@ -80,19 +80,24 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      adminApi.stats(),
-      adminApi.applications("PENDING"),
-      adminApi.queries("OPEN"),
-      adminApi.batches("ACTIVE"),
-    ]).then(([s, apps, queries, batchRes]) => {
-      setStats(s.data || s);
-      setPending((apps.data || []).slice(0, 3));
-      setOpenQ((queries.data || []).slice(0, 4));
-      setBatches((batchRes.data || []).slice(0, 4));
-    })
-    .catch(console.error)
-    .finally(() => setLoading(false));
+    // Each call is independent — one failure doesn't break the others
+    adminApi.stats()
+      .then(r => setStats(r.data || r))
+      .catch(e => console.error("Stats failed:", e));
+
+    adminApi.applications("PENDING")
+      .then(r => setPending((r.data || []).slice(0, 3)))
+      .catch(e => console.error("Applications failed:", e));
+
+    adminApi.queries("OPEN")
+      .then(r => setOpenQ((r.data || []).slice(0, 4)))
+      .catch(e => console.error("Queries failed:", e));
+
+    adminApi.batches("ACTIVE")
+      .then(r => setBatches((r.data || []).slice(0, 4)))
+      .catch(e => console.error("Batches failed:", e));
+
+    setLoading(false);
   }, []);
 
   const s = stats || {};

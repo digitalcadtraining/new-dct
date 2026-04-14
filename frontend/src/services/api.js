@@ -146,16 +146,25 @@ export const queryApi = {
 };
 
 export const adminApi = {
-  stats:        ()          => http("/admin/stats"),
-  applications: (status)    => http(`/admin/applications${status ? `?status=${status}` : ""}`),
-  approveApp:   (id)        => http(`/admin/applications/${id}/approve`, { method:"POST" }),
-  rejectApp:    (id, note)  => http(`/admin/applications/${id}/reject`,  { method:"POST", body:JSON.stringify({ rejection_note: note }) }),
-  students:     (search)    => http(`/admin/students${search ? `?search=${search}` : ""}`),
-  tutors:       ()          => http("/admin/tutors"),
-  batches:      (status)    => http(`/admin/batches${status ? `?status=${status}` : ""}`),
-  approveBatch: (id)        => http(`/admin/batches/${id}/approve`, { method:"POST" }),
-  rejectBatch:  (id)        => http(`/admin/batches/${id}/reject`,  { method:"POST" }),
-  queries:      (status)    => http(`/admin/queries${status ? `?status=${status}` : ""}`),
+  stats:            ()                       => http("/admin/stats"),
+  applications:     (status)                 => http(`/admin/applications${status ? `?status=${status}` : ""}`),
+  approveApp:       (id)                     => http(`/admin/applications/${id}/approve`, { method:"POST" }),
+  rejectApp:        (id, note)               => http(`/admin/applications/${id}/reject`,  { method:"POST", body:JSON.stringify({ rejection_note: note }) }),
+  students:         (search, page, pageSize) => {
+    const params = new URLSearchParams();
+    if (search)   params.set("search",   search);
+    if (page)     params.set("page",     page);
+    if (pageSize) params.set("pageSize", pageSize);
+    const qs = params.toString();
+    return http(`/admin/students${qs ? `?${qs}` : ""}`);
+  },
+  tutors:           ()                       => http("/admin/tutors"),
+  batches:          (status)                 => http(`/admin/batches${status ? `?status=${status}` : ""}`),
+  approveBatch:     (id)                     => http(`/admin/batches/${id}/approve`, { method:"POST" }),
+  rejectBatch:      (id)                     => http(`/admin/batches/${id}/reject`,  { method:"POST" }),
+  queries:          (status)                 => http(`/admin/queries${status ? `?status=${status}` : ""}`),
+  resolveQuery:     (id)                     => http(`/admin/queries/${id}/resolve`, { method:"PATCH" }),
+  toggleUserStatus: (id)                     => http(`/admin/users/${id}/status`,   { method:"PATCH" }),
 };
 
 export const api = {

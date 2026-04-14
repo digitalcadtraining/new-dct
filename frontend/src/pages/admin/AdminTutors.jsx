@@ -231,45 +231,50 @@ export default function AdminTutors() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([
-      adminApi.applications("PENDING"),
-      adminApi.tutors(),
-    ]).then(([pendingRes, approvedRes]) => {
-      setPending((pendingRes.data || []).map(a => ({
-        id:                a.id,
-        name:              a.name,
-        email:             a.email,
-        phone:             a.phone,
-        occupation:        a.occupation,
-        yearsExp:          a.years_exp,
-        companies:         a.companies,
-        workExp:           a.work_experience,
-        location:          a.location,
-        timeSlots:         a.time_slots || [],
-        course:            a.course?.name || "",
-        syllabus_sessions: a.syllabus_sessions || [],
-        syllabus_projects: a.syllabus_projects || [],
-        languages:         a.languages || [],
-        appliedOn:         new Date(a.applied_on).toLocaleDateString("en-IN"),
-        // For card display
-        sessions:          (a.syllabus_sessions || []).length,
-        projects:          (a.syllabus_projects || []).length,
-      })));
 
-      setApproved((approvedRes.data || []).map(t => ({
-        id:            t.id,
-        name:          t.name,
-        email:         t.email,
-        phone:         t.phone,
-        occupation:    t.tutor_application?.course?.name || "Tutor",
-        yearsExp:      t.tutor_application?.years_exp || 0,
-        location:      t.tutor_application?.location || "",
-        activeBatches: t.tutor_batches?.filter(b => b.status === "ACTIVE").length || 0,
-        totalStudents: t.tutor_batches?.reduce((s, b) => s + (b._count?.enrollments || 0), 0) || 0,
-        rating:        null,
-      })));
-    }).catch(console.error)
-    .finally(() => setLoading(false));
+    // Load pending applications
+    adminApi.applications("PENDING")
+      .then(pendingRes => {
+        setPending((pendingRes.data || []).map(a => ({
+          id:                a.id,
+          name:              a.name,
+          email:             a.email,
+          phone:             a.phone,
+          occupation:        a.occupation,
+          yearsExp:          a.years_exp,
+          companies:         a.companies,
+          workExp:           a.work_experience,
+          location:          a.location,
+          timeSlots:         a.time_slots || [],
+          course:            a.course?.name || "",
+          syllabus_sessions: a.syllabus_sessions || [],
+          syllabus_projects: a.syllabus_projects || [],
+          languages:         a.languages || [],
+          appliedOn:         new Date(a.applied_on).toLocaleDateString("en-IN"),
+          sessions:          (a.syllabus_sessions || []).length,
+          projects:          (a.syllabus_projects || []).length,
+        })));
+      })
+      .catch(e => console.error("Failed to load applications:", e));
+
+    // Load approved tutors
+    adminApi.tutors()
+      .then(approvedRes => {
+        setApproved((approvedRes.data || []).map(t => ({
+          id:            t.id,
+          name:          t.name,
+          email:         t.email,
+          phone:         t.phone,
+          occupation:    t.tutor_application?.course?.name || "Tutor",
+          yearsExp:      t.tutor_application?.years_exp || 0,
+          location:      t.tutor_application?.location || "",
+          activeBatches: t.tutor_batches?.filter(b => b.status === "ACTIVE").length || 0,
+          totalStudents: t.tutor_batches?.reduce((s, b) => s + (b._count?.enrollments || 0), 0) || 0,
+          rating:        null,
+        })));
+      })
+      .catch(e => console.error("Failed to load tutors:", e))
+      .finally(() => setLoading(false));
   }, []);
 
   const handleApprove = async (id) => {
