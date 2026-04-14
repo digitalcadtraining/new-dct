@@ -53,26 +53,19 @@ const getStats = async (req, res, next) => {
 // GET /admin/applications?status=PENDING&page=1
 const listApplications = async (req, res, next) => {
   try {
-    const { status, page, pageSize } = req.query;
-    const { skip, take, page: p, pageSize: ps } = getPagination(page, pageSize);
+    const { status } = req.query;
 
-    const [applications, total] = await Promise.all([
-      prisma.tutorApplication.findMany({
-        where: status ? { status } : {},
-        skip,
-        take,
-        orderBy: { applied_on: "desc" },
-        include: {
-          course: { select: { name: true } },
-          syllabus_sessions: { orderBy: { session_number: "asc" } },
-          syllabus_projects: true,
-          user: { select: { id: true, name: true, email: true } },
-        },
-      }),
-      prisma.tutorApplication.count({ where: status ? { status } : {} }),
-    ]);
+    const applications = await prisma.tutorApplication.findMany({
+      where:   status ? { status } : {},
+      orderBy: { applied_on: "desc" },
+      include: {
+        course:            { select: { name: true } },
+        syllabus_sessions: { orderBy: { session_number: "asc" } },
+        syllabus_projects: true,
+      },
+    });
 
-    return paginated(res, applications, total, p, ps, "Applications fetched.");
+    return success(res, 200, "Applications fetched.", applications, { total: applications.length });
   } catch (err) {
     next(err);
   }
