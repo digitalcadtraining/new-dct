@@ -4,11 +4,11 @@
  * Manages: tutor applications, courses, users, platform stats
  */
 
-const bcrypt     = require("bcryptjs");
+const bcrypt = require("bcryptjs");
 const { prisma } = require("../config/db");
 const { success, error, paginated } = require("../utils/response");
 const { getPagination } = require("../utils/helpers");
-const { sendOtp }       = require("../services/otp.service");
+const { sendOtp } = require("../services/otp.service");
 
 // ── STATS: Platform overview ──────────────────────────────
 // GET /admin/stats
@@ -35,8 +35,14 @@ const getStats = async (req, res, next) => {
     ]);
 
     return success(res, 200, "Platform stats.", {
-      totalStudents, activeStudents, totalTutors, pendingApplications,
-      activeBatches, completedBatches, totalQueries, unresolvedQueries,
+      totalStudents,
+      activeStudents,
+      totalTutors,
+      pendingApplications,
+      activeBatches,
+      completedBatches,
+      totalQueries,
+      unresolvedQueries,
     });
   } catch (err) {
     next(err);
@@ -52,14 +58,15 @@ const listApplications = async (req, res, next) => {
 
     const [applications, total] = await Promise.all([
       prisma.tutorApplication.findMany({
-        where:   status ? { status } : {},
-        skip, take,
+        where: status ? { status } : {},
+        skip,
+        take,
         orderBy: { applied_on: "desc" },
         include: {
           course: { select: { name: true } },
           syllabus_sessions: { orderBy: { session_number: "asc" } },
           syllabus_projects: true,
-          user:  { select: { id: true, name: true, email: true } },
+          user: { select: { id: true, name: true, email: true } },
         },
       }),
       prisma.tutorApplication.count({ where: status ? { status } : {} }),
@@ -79,36 +86,39 @@ const approveApplication = async (req, res, next) => {
     const { id } = req.params;
 
     const application = await prisma.tutorApplication.findUnique({
-      where:   { id },
+      where: { id },
       include: { course: true },
     });
 
-    if (!application)                    return error(res, 404, "Application not found.");
-    if (application.status !== "PENDING") return error(res, 400, "Application already reviewed.");
+    if (!application) return error(res, 404, "Application not found.");
+    if (application.status !== "PENDING")
+      return error(res, 400, "Application already reviewed.");
 
     // Check if email/phone already registered
     const [existingEmail, existingPhone] = await Promise.all([
       prisma.user.findUnique({ where: { email: application.email } }),
       prisma.user.findUnique({ where: { phone: application.phone } }),
     ]);
-    if (existingEmail) return error(res, 409, "Email already registered as a user.");
-    if (existingPhone) return error(res, 409, "Phone already registered as a user.");
+    if (existingEmail)
+      return error(res, 409, "Email already registered as a user.");
+    if (existingPhone)
+      return error(res, 409, "Phone already registered as a user.");
 
     // Generate temporary password
-    const tempPassword    = `DCT@${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-    const password_hash   = await bcrypt.hash(tempPassword, 12);
+    const tempPassword = `DCT@${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    const password_hash = await bcrypt.hash(tempPassword, 12);
 
     const { tutorUser } = await prisma.$transaction(async (tx) => {
       // 1. Create tutor user account
       const tutorUser = await tx.user.create({
         data: {
-          name:         application.name,
-          email:        application.email,
-          phone:        application.phone,
+          name: application.name,
+          email: application.email,
+          phone: application.phone,
           password_hash,
-          role:         "TUTOR",
-          is_verified:  true,
-          is_active:    true,
+          role: "TUTOR",
+          is_verified: true,
+          is_active: true,
         },
       });
 
@@ -116,9 +126,9 @@ const approveApplication = async (req, res, next) => {
       await tx.tutorApplication.update({
         where: { id },
         data: {
-          status:      "APPROVED",
+          status: "APPROVED",
           reviewed_on: new Date(),
-          user_id:     tutorUser.id,
+          user_id: tutorUser.id,
         },
       });
 
@@ -133,13 +143,20 @@ const approveApplication = async (req, res, next) => {
     console.log(`   Temp password: ${tempPassword}`);
     console.log(`   (In production this would be sent via SMS/email)\n`);
 
-    return success(res, 200, "Application approved. Tutor account created and credentials sent.", {
-      tutor_id:  tutorUser.id,
-      name:      application.name,
-      email:     application.email,
-      // Only return temp password in dev
-      ...(process.env.NODE_ENV === "development" && { temp_password: tempPassword }),
-    });
+    return success(
+      res,
+      200,
+      "Application approved. Tutor account created and credentials sent.",
+      {
+        tutor_id: tutorUser.id,
+        name: application.name,
+        email: application.email,
+        // Only return temp password in dev
+        ...(process.env.NODE_ENV === "development" && {
+          temp_password: tempPassword,
+        }),
+      },
+    );
   } catch (err) {
     next(err);
   }
@@ -151,9 +168,12 @@ const rejectApplication = async (req, res, next) => {
   try {
     const { rejection_note } = req.body;
 
-    const application = await prisma.tutorApplication.findUnique({ where: { id: req.params.id } });
-    if (!application)                    return error(res, 404, "Application not found.");
-    if (application.status !== "PENDING") return error(res, 400, "Application already reviewed.");
+    const application = await prisma.tutorApplication.findUnique({
+      where: { id: req.params.id },
+    });
+    if (!application) return error(res, 404, "Application not found.");
+    if (application.status !== "PENDING")
+      return error(res, 400, "Application already reviewed.");
 
     await prisma.tutorApplication.update({
       where: { id: req.params.id },
@@ -177,7 +197,7 @@ const listStudents = async (req, res, next) => {
       role: "STUDENT",
       ...(search && {
         OR: [
-          { name:  { contains: search, mode: "insensitive" } },
+          { name: { contains: search, mode: "insensitive" } },
           { email: { contains: search, mode: "insensitive" } },
           { phone: { contains: search } },
         ],
@@ -186,15 +206,25 @@ const listStudents = async (req, res, next) => {
 
     const [students, total] = await Promise.all([
       prisma.user.findMany({
-        where, skip, take,
+        where,
+        skip,
+        take,
         orderBy: { created_at: "desc" },
         select: {
-          id: true, name: true, email: true, phone: true,
-          is_active: true, created_at: true,
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          is_active: true,
+          created_at: true,
           enrollments: {
             include: {
               batch: {
-                select: { name: true, course: { select: { name: true } }, tutor: { select: { name: true } } }
+                select: {
+                  name: true,
+                  course: { select: { name: true } },
+                  tutor: { select: { name: true } },
+                },
               },
             },
           },
@@ -214,15 +244,27 @@ const listStudents = async (req, res, next) => {
 const listTutors = async (req, res, next) => {
   try {
     const tutors = await prisma.user.findMany({
-      where:   { role: "TUTOR" },
+      where: { role: "TUTOR" },
       orderBy: { created_at: "desc" },
       select: {
-        id: true, name: true, email: true, phone: true, is_active: true,
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        is_active: true,
         tutor_application: {
-          select: { course: { select: { name: true } }, years_exp: true, location: true },
+          select: {
+            course: { select: { name: true } },
+            years_exp: true,
+            location: true,
+          },
         },
         tutor_batches: {
-          select: { id: true, status: true, _count: { select: { enrollments: true } } },
+          select: {
+            id: true,
+            status: true,
+            _count: { select: { enrollments: true } },
+          },
         },
       },
     });
@@ -238,11 +280,11 @@ const listAllBatches = async (req, res, next) => {
   try {
     const { status } = req.query;
     const batches = await prisma.batch.findMany({
-      where:   status ? { status } : {},
+      where: status ? { status } : {},
       orderBy: { start_date: "desc" },
       include: {
         course: { select: { name: true } },
-        tutor:  { select: { name: true } },
+        tutor: { select: { name: true } },
         _count: { select: { enrollments: true, scheduled_sessions: true } },
       },
     });
@@ -258,7 +300,7 @@ const listAllQueries = async (req, res, next) => {
   try {
     const { status } = req.query;
     const queries = await prisma.query.findMany({
-      where:   status ? { status } : {},
+      where: status ? { status } : {},
       orderBy: { created_at: "desc" },
       include: {
         student: { select: { name: true } },
@@ -277,15 +319,21 @@ const toggleUserStatus = async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!user) return error(res, 404, "User not found.");
-    if (user.role === "ADMIN") return error(res, 400, "Cannot deactivate admin accounts.");
+    if (user.role === "ADMIN")
+      return error(res, 400, "Cannot deactivate admin accounts.");
 
     const updated = await prisma.user.update({
       where: { id: req.params.id },
-      data:  { is_active: !user.is_active },
+      data: { is_active: !user.is_active },
       select: { id: true, name: true, is_active: true },
     });
 
-    return success(res, 200, `User ${updated.is_active ? "activated" : "deactivated"}.`, updated);
+    return success(
+      res,
+      200,
+      `User ${updated.is_active ? "activated" : "deactivated"}.`,
+      updated,
+    );
   } catch (err) {
     next(err);
   }
@@ -294,45 +342,53 @@ const toggleUserStatus = async (req, res, next) => {
 const listPendingBatches = async (req, res, next) => {
   try {
     const batches = await prisma.batch.findMany({
-      where:   { status: "PENDING_APPROVAL" },
+      where: { status: "PENDING_APPROVAL" },
       orderBy: { created_at: "desc" },
       include: {
         course: { select: { name: true } },
-        tutor:  { select: { name: true, email: true } },
+        tutor: { select: { name: true, email: true } },
         _count: { select: { scheduled_sessions: true, enrollments: true } },
       },
     });
     return success(res, 200, "Pending batches.", batches);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
 const approveBatch = async (req, res, next) => {
   try {
     const updated = await prisma.batch.update({
       where: { id: req.params.id },
-      data:  { status: "UPCOMING" },
+      data: { status: "UPCOMING" },
     });
     return success(res, 200, "Batch approved.", updated);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
 const rejectBatch = async (req, res, next) => {
   try {
     await prisma.batch.delete({ where: { id: req.params.id } });
     return success(res, 200, "Batch rejected and removed.");
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 };
 
 // ── ADMIN: Resolve a query ────────────────────────────────
 // PATCH /admin/queries/:id/resolve
 const resolveQuery = async (req, res, next) => {
   try {
-    const query = await prisma.query.findUnique({ where: { id: req.params.id } });
+    const query = await prisma.query.findUnique({
+      where: { id: req.params.id },
+    });
     if (!query) return error(res, 404, "Query not found.");
 
     const updated = await prisma.query.update({
       where: { id: req.params.id },
-      data:  { status: "RESOLVED" },
+      data: { status: "RESOLVED" },
     });
     return success(res, 200, "Query resolved.", updated);
   } catch (err) {
