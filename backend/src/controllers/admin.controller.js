@@ -323,6 +323,23 @@ const rejectBatch = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ── ADMIN: Resolve a query ────────────────────────────────
+// PATCH /admin/queries/:id/resolve
+const resolveQuery = async (req, res, next) => {
+  try {
+    const query = await prisma.query.findUnique({ where: { id: req.params.id } });
+    if (!query) return error(res, 404, "Query not found.");
+
+    const updated = await prisma.query.update({
+      where: { id: req.params.id },
+      data:  { status: "RESOLVED" },
+    });
+    return success(res, 200, "Query resolved.", updated);
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getStats,
   listApplications,
