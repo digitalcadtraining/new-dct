@@ -45,13 +45,13 @@ async function http(path, opts = {}, retry = true) {
       } else {
         localStorage.removeItem("dct_access_token");
         localStorage.removeItem("dct_user");
-        window.location.href = "/auth/login";
+        window.location.href = "/dct/auth/login";
         return;
       }
     } catch {
       localStorage.removeItem("dct_access_token");
       localStorage.removeItem("dct_user");
-      window.location.href = "/auth/login";
+      window.location.href = "/dct/auth/login";
       return;
     }
   }
