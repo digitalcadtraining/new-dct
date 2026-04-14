@@ -232,10 +232,9 @@ export default function AdminTutors() {
   useEffect(() => {
     setLoading(true);
 
-    // Load pending applications
-    adminApi.applications("PENDING")
-      .then(pendingRes => {
-        setPending((pendingRes.data || []).map(a => ({
+    const loadApplications = adminApi.applications("PENDING")
+      .then(res => {
+        setPending((res.data || []).map(a => ({
           id:                a.id,
           name:              a.name,
           email:             a.email,
@@ -255,12 +254,11 @@ export default function AdminTutors() {
           projects:          (a.syllabus_projects || []).length,
         })));
       })
-      .catch(e => console.error("Failed to load applications:", e));
+      .catch(e => console.error("Applications error:", e));
 
-    // Load approved tutors
-    adminApi.tutors()
-      .then(approvedRes => {
-        setApproved((approvedRes.data || []).map(t => ({
+    const loadTutors = adminApi.tutors()
+      .then(res => {
+        setApproved((res.data || []).map(t => ({
           id:            t.id,
           name:          t.name,
           email:         t.email,
@@ -273,25 +271,37 @@ export default function AdminTutors() {
           rating:        null,
         })));
       })
-      .catch(e => console.error("Failed to load tutors:", e))
+      .catch(e => console.error("Tutors error:", e));
+
+    // Loading clears once BOTH calls finish (success or fail)
+    Promise.allSettled([loadApplications, loadTutors])
       .finally(() => setLoading(false));
   }, []);
 
+  const [toast, setToast] = useState(null);
+  const showToast = (msg, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
   const handleApprove = async (id) => {
     try {
-      await adminApi.approveApp(id);
-      const tutor = pending.find(t => t.id === id);
+      const res = await adminApi.approveApp(id);
+      const tempPwd = res.data?.temp_password;
       setPending(p => p.filter(t => t.id !== id));
-      setApproved(a => [...a, { ...tutor, activeBatches:0, totalStudents:0, rating:null }]);
-      alert("✅ Tutor approved! Check backend terminal for temp password.");
-    } catch (e) { alert("Error: " + e.message); }
+      showToast(tempPwd
+        ? `✅ Approved! Temp password: ${tempPwd}`
+        : "✅ Tutor approved! Check backend terminal for temp password."
+      );
+    } catch (e) { showToast(e.message || "Approval failed", "error"); }
   };
 
   const handleReject = async (id) => {
     try {
       await adminApi.rejectApp(id, "");
       setPending(p => p.filter(t => t.id !== id));
-    } catch (e) { alert("Error: " + e.message); }
+      showToast("Application rejected.");
+    } catch (e) { showToast(e.message || "Rejection failed", "error"); }
   };
 
   return (
@@ -447,6 +457,16 @@ export default function AdminTutors() {
           onReject={handleReject}
         />
       </PageWrapper>
+
+      {/* Toast notification */}
+      {toast && (
+        <motion.div
+          initial={{ opacity:0, y:40 }} animate={{ opacity:1, y:0 }} exit={{ opacity:0, y:40 }}
+          className="fixed bottom-6 right-6 z-50 px-5 py-3 rounded-2xl text-white text-sm font-bold shadow-lg max-w-sm"
+          style={{ background: toast.type === "error" ? "#dc2626" : "#16a34a" }}>
+          {toast.msg}
+        </motion.div>
+      )}
     </AppShell>
   );
 }
