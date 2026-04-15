@@ -313,7 +313,7 @@ function deriveBatchStatus(batch) {
   const end   = batch.end_date   ? new Date(batch.end_date)   : null;
   if (start && end) {
     if (now < start)  return "UPCOMING";
-    if (now > end)    return "COMPLETED";
+    if (now >= end)    return "COMPLETED";
     return "ACTIVE";
   }
   return batch.status || "UPCOMING";

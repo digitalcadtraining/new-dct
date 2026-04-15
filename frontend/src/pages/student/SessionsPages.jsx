@@ -712,8 +712,13 @@ function BatchSelectorCard({ batch, selected, onClick }) {
   const end = batch.end_date ? new Date(batch.end_date) : null;
   let batchStatus = "Upcoming";
   if (start && end) {
-    if (now >= start && now <= end) batchStatus = "Active";
-    else if (now > end) batchStatus = "Completed";
+    if (now < start) {
+      batchStatus = "Upcoming";
+    } else if (now >= start && now < end) {
+      batchStatus = "Active";
+    } else {
+      batchStatus = "Completed";
+    }
   }
   const startStr = start
     ? start.toLocaleDateString("en-IN", {
