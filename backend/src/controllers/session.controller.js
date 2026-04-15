@@ -8,7 +8,6 @@ const { prisma } = require("../config/db");
 const { success, error } = require("../utils/response");
 
 // ── STUDENT/TUTOR: Get sessions for a batch ───────────────
-// GET /sessions/batch/:batchId?status=UPCOMING|LIVE|COMPLETED
 const getBatchSessions = async (req, res, next) => {
   try {
     const { batchId } = req.params;
@@ -27,15 +26,10 @@ const getBatchSessions = async (req, res, next) => {
     }
 
     const sessions = await prisma.scheduledSession.findMany({
-      where: {
-        batch_id: batchId,
-        ...(status && { status }),
-      },
+      where: { batch_id: batchId, ...(status && { status }) },
       orderBy: { session_number: "asc" },
       include: {
-        assignments: {
-          select: { id: true, title: true, due_date: true },
-        },
+        assignments: { select: { id: true, title: true, due_date: true } },
       },
     });
 
@@ -45,8 +39,7 @@ const getBatchSessions = async (req, res, next) => {
   }
 };
 
-// ── TUTOR: Update a session (add date, zoom link, recording) ──
-// PATCH /sessions/:id
+// ── TUTOR: Update a session ───────────────────────────────
 const updateSession = async (req, res, next) => {
   try {
     const session = await prisma.scheduledSession.findFirst({
@@ -61,16 +54,15 @@ const updateSession = async (req, res, next) => {
 
     const { scheduled_at, zoom_link, recording_url, notes_url, status } = req.body;
     const updateData = {};
-
-    if (scheduled_at !== undefined) updateData.scheduled_at = new Date(scheduled_at);
-    if (zoom_link !== undefined) updateData.zoom_link = zoom_link;
+    if (scheduled_at  !== undefined) updateData.scheduled_at  = new Date(scheduled_at);
+    if (zoom_link     !== undefined) updateData.zoom_link     = zoom_link;
     if (recording_url !== undefined) updateData.recording_url = recording_url;
-    if (notes_url !== undefined) updateData.notes_url = notes_url;
-    if (status !== undefined) updateData.status = status;
+    if (notes_url     !== undefined) updateData.notes_url     = notes_url;
+    if (status        !== undefined) updateData.status        = status;
 
     const updated = await prisma.scheduledSession.update({
       where: { id: req.params.id },
-      data: updateData,
+      data:  updateData,
     });
 
     return success(res, 200, "Session updated.", updated);
@@ -82,21 +74,14 @@ const updateSession = async (req, res, next) => {
 // ══════════════════════════════════════════════════════════
 // ASSIGNMENT CONTROLLER
 // ══════════════════════════════════════════════════════════
-
 const assignmentController = {
-  // TUTOR: Create assignment for a batch
-  // POST /assignments
+
   createAssignment: async (req, res, next) => {
     try {
       const { batch_id, session_id, title, description, due_date } = req.body;
+      if (!batch_id || !title) return error(res, 400, "batch_id and title are required.");
 
-      if (!batch_id || !title) {
-        return error(res, 400, "batch_id and title are required.");
-      }
-
-      const batch = await prisma.batch.findFirst({
-        where: { id: batch_id, tutor_id: req.user.id },
-      });
+      const batch = await prisma.batch.findFirst({ where: { id: batch_id, tutor_id: req.user.id } });
       if (!batch) return error(res, 403, "You do not own this batch.");
 
       const assignment = await prisma.assignment.create({
@@ -105,182 +90,110 @@ const assignmentController = {
           session_id: session_id || null,
           title,
           description,
-          file_url: req.file?.path || null,
-          due_date: due_date ? new Date(due_date) : null,
+          file_url:  req.file?.path || null,
+          due_date:  due_date ? new Date(due_date) : null,
         },
       });
-
       return success(res, 201, "Assignment created.", assignment);
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 
-  // STUDENT: Get assignments for my batch
-  // GET /assignments/batch/:batchId
   getBatchAssignments: async (req, res, next) => {
     try {
       const { batchId } = req.params;
-
       const enrolled = await prisma.enrollment.findFirst({
         where: { student_id: req.user.id, batch_id: batchId },
       });
       if (!enrolled) return error(res, 403, "Not enrolled in this batch.");
 
       const assignments = await prisma.assignment.findMany({
-        where: { batch_id: batchId },
+        where:   { batch_id: batchId },
         orderBy: { created_at: "asc" },
         include: {
           session: { select: { session_number: true, name: true } },
           submissions: {
-            where: { student_id: req.user.id },
-            select: {
-              id: true,
-              status: true,
-              grade: true,
-              feedback: true,
-              submitted_at: true,
-            },
+            where:  { student_id: req.user.id },
+            select: { id: true, status: true, grade: true, feedback: true, submitted_at: true, file_url: true },
           },
         },
       });
-
       return success(res, 200, "Assignments fetched.", assignments);
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 
-  // STUDENT: Submit assignment
-  // POST /assignments/:id/submit
   submitAssignment: async (req, res, next) => {
     try {
-      const assignment = await prisma.assignment.findUnique({
-        where: { id: req.params.id },
-      });
+      const assignment = await prisma.assignment.findUnique({ where: { id: req.params.id } });
       if (!assignment) return error(res, 404, "Assignment not found.");
 
       const enrolled = await prisma.enrollment.findFirst({
         where: { student_id: req.user.id, batch_id: assignment.batch_id },
       });
       if (!enrolled) return error(res, 403, "Not enrolled in this batch.");
-
       if (!req.file) return error(res, 400, "Please upload your assignment file.");
 
       const submission = await prisma.assignmentSubmission.upsert({
         where: {
-          assignment_id_student_id: {
-            assignment_id: req.params.id,
-            student_id: req.user.id,
-          },
+          assignment_id_student_id: { assignment_id: req.params.id, student_id: req.user.id },
         },
-        create: {
-          assignment_id: req.params.id,
-          student_id: req.user.id,
-          file_url: req.file.path,
-          status: "SUBMITTED",
-        },
-        update: {
-          file_url: req.file.path,
-          status: "SUBMITTED",
-          submitted_at: new Date(),
-        },
+        create: { assignment_id: req.params.id, student_id: req.user.id, file_url: req.file.path, status: "SUBMITTED" },
+        update: { file_url: req.file.path, status: "SUBMITTED", submitted_at: new Date() },
       });
-
       return success(res, 200, "Assignment submitted.", submission);
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 
-  // TUTOR: Review submission (give grade + feedback)
-  // PATCH /assignments/submissions/:id/review
   reviewSubmission: async (req, res, next) => {
     try {
       const { grade, feedback, status } = req.body;
-
       const submission = await prisma.assignmentSubmission.findUnique({
-        where: { id: req.params.id },
-        include: {
-          assignment: {
-            include: {
-              batch: { select: { tutor_id: true } },
-            },
-          },
-        },
+        where:   { id: req.params.id },
+        include: { assignment: { include: { batch: { select: { tutor_id: true } } } } },
       });
-
       if (!submission) return error(res, 404, "Submission not found.");
-      if (submission.assignment.batch.tutor_id !== req.user.id) {
-        return error(res, 403, "You do not own this batch.");
-      }
+      if (submission.assignment.batch.tutor_id !== req.user.id) return error(res, 403, "You do not own this batch.");
 
       const updated = await prisma.assignmentSubmission.update({
         where: { id: req.params.id },
-        data: {
-          grade,
-          feedback,
-          status: status || "REVIEWED",
-          reviewed_at: new Date(),
-        },
+        data:  { grade, feedback, status: status || "REVIEWED", reviewed_at: new Date() },
       });
-
       return success(res, 200, "Submission reviewed.", updated);
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 
-  // TUTOR: Get all assignments for their batch with all student submissions
-  // GET /assignments/tutor/batch/:batchId
   getTutorBatchAssignments: async (req, res, next) => {
     try {
       const { batchId } = req.params;
-
-      const batch = await prisma.batch.findFirst({
-        where: { id: batchId, tutor_id: req.user.id },
-      });
+      const batch = await prisma.batch.findFirst({ where: { id: batchId, tutor_id: req.user.id } });
       if (!batch) return error(res, 403, "You do not own this batch.");
 
       const assignments = await prisma.assignment.findMany({
-        where: { batch_id: batchId },
+        where:   { batch_id: batchId },
         orderBy: { created_at: "asc" },
         include: {
-          session: { select: { session_number: true, name: true } },
+          session:     { select: { session_number: true, name: true } },
           submissions: {
-            include: {
-              student: { select: { id: true, name: true, email: true } },
-            },
+            include: { student: { select: { id: true, name: true, email: true } } },
             orderBy: { submitted_at: "desc" },
           },
         },
       });
-
       return success(res, 200, "Assignments fetched.", assignments);
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 };
 
 // ══════════════════════════════════════════════════════════
 // QUERY CONTROLLER
 // ══════════════════════════════════════════════════════════
-
 const queryController = {
-  // STUDENT: Create query with optional media
-  // POST /queries
+
   createQuery: async (req, res, next) => {
     try {
       const { batch_id, session_id, question } = req.body;
+      if (!batch_id || !question) return error(res, 400, "batch_id and question are required.");
 
-      if (!batch_id || !question) {
-        return error(res, 400, "batch_id and question are required.");
-      }
-
-      const enrolled = await prisma.enrollment.findFirst({
-        where: { student_id: req.user.id, batch_id },
-      });
+      const enrolled = await prisma.enrollment.findFirst({ where: { student_id: req.user.id, batch_id } });
       if (!enrolled) return error(res, 403, "Not enrolled in this batch.");
 
       const query = await prisma.query.create({
@@ -289,21 +202,14 @@ const queryController = {
           batch_id,
           session_id: session_id || null,
           question,
-          media_url: req.file ? req.file.path : null,
+          media_url:  req.file ? req.file.path : null,
         },
-        include: {
-          session: { select: { session_number: true, name: true } },
-        },
+        include: { session: { select: { session_number: true, name: true } } },
       });
-
       return success(res, 201, "Query submitted.", query);
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 
-  // STUDENT: Get my queries with auto-resolve logic
-  // GET /queries/mine?batch_id=xxx
   getMyQueries: async (req, res, next) => {
     try {
       const queries = await prisma.query.findMany({
@@ -314,159 +220,99 @@ const queryController = {
         orderBy: { created_at: "asc" },
         include: {
           session: { select: { session_number: true, name: true } },
-          batch: {
-            include: {
-              tutor: { select: { phone: true, name: true } },
-            },
-          },
+          batch:   { include: { tutor: { select: { phone: true, name: true } } } },
         },
       });
 
       const now = Date.now();
-      const toAutoResolve = queries.filter(
-        (q) =>
-          q.status === "OPEN" &&
-          !q.answer &&
-          !q.is_reminded &&
-          now - new Date(q.created_at).getTime() > 36 * 3600 * 1000
+      const toAutoResolve = queries.filter(q =>
+        q.status === "OPEN" && !q.answer && !q.is_reminded &&
+        now - new Date(q.created_at).getTime() > 36 * 3600 * 1000
       );
-
       if (toAutoResolve.length > 0) {
         await prisma.query.updateMany({
-          where: { id: { in: toAutoResolve.map((q) => q.id) } },
-          data: { status: "AUTO_RESOLVED" },
+          where: { id: { in: toAutoResolve.map(q => q.id) } },
+          data:  { status: "AUTO_RESOLVED" },
         });
-        toAutoResolve.forEach((q) => {
-          q.status = "AUTO_RESOLVED";
-        });
+        toAutoResolve.forEach(q => { q.status = "AUTO_RESOLVED"; });
       }
 
       queries.sort((a, b) => {
-        const rank = (q) => {
-          if (q.status === "RESOLVED") return 4;
+        const rank = q => {
+          if (q.status === "RESOLVED")      return 4;
           if (q.status === "AUTO_RESOLVED") return 3;
-          if (q.answer) return 2;
+          if (q.answer)                     return 2;
           return 1;
         };
-
-        const ra = rank(a);
-        const rb = rank(b);
+        const ra = rank(a), rb = rank(b);
         if (ra !== rb) return ra - rb;
         return new Date(a.created_at) - new Date(b.created_at);
       });
 
       return success(res, 200, "Your queries.", queries);
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 
-  // STUDENT: Remind tutor
-  // PATCH /queries/:id/remind
   remindTutor: async (req, res, next) => {
     try {
-      const query = await prisma.query.findUnique({
-        where: { id: req.params.id },
-      });
-
-      if (!query) return error(res, 404, "Query not found.");
+      const query = await prisma.query.findUnique({ where: { id: req.params.id } });
+      if (!query)                        return error(res, 404, "Query not found.");
       if (query.student_id !== req.user.id) return error(res, 403, "Not your query.");
-      if (query.answer) return error(res, 400, "Query already answered.");
-      if (query.status !== "OPEN") return error(res, 400, "Query is not open.");
+      if (query.answer)                  return error(res, 400, "Query already answered.");
+      if (query.status !== "OPEN")       return error(res, 400, "Query is not open.");
 
       if (query.reminded_at) {
         const hrs = (Date.now() - new Date(query.reminded_at).getTime()) / 3600000;
-        if (hrs < 6) {
-          return error(res, 429, `You can remind again in ${Math.ceil(6 - hrs)} hour(s).`);
-        }
+        if (hrs < 6) return error(res, 429, `You can remind again in ${Math.ceil(6 - hrs)} hour(s).`);
       }
 
       const updated = await prisma.query.update({
         where: { id: req.params.id },
-        data: {
-          is_reminded: true,
-          reminded_at: new Date(),
-          remind_count: { increment: 1 },
-        },
-        include: {
-          session: { select: { session_number: true, name: true } },
-        },
+        data:  { is_reminded: true, reminded_at: new Date(), remind_count: { increment: 1 } },
+        include: { session: { select: { session_number: true, name: true } } },
       });
-
       return success(res, 200, "Tutor reminded.", updated);
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 
-  // STUDENT: Mark resolved
-  // PATCH /queries/:id/resolve
   resolveQuery: async (req, res, next) => {
     try {
-      const query = await prisma.query.findUnique({
-        where: { id: req.params.id },
-      });
-
-      if (!query) return error(res, 404, "Query not found.");
+      const query = await prisma.query.findUnique({ where: { id: req.params.id } });
+      if (!query)                           return error(res, 404, "Query not found.");
       if (query.student_id !== req.user.id) return error(res, 403, "Not your query.");
 
       const updated = await prisma.query.update({
         where: { id: req.params.id },
-        data: { status: "RESOLVED" },
-        include: {
-          session: { select: { session_number: true, name: true } },
-        },
+        data:  { status: "RESOLVED" },
+        include: { session: { select: { session_number: true, name: true } } },
       });
-
       return success(res, 200, "Query resolved.", updated);
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 
-  // STUDENT: Reactivate an auto-resolved query
-  // PATCH /queries/:id/reactivate
   reactivateQuery: async (req, res, next) => {
     try {
-      const query = await prisma.query.findUnique({
-        where: { id: req.params.id },
-      });
-
-      if (!query) return error(res, 404, "Query not found.");
+      const query = await prisma.query.findUnique({ where: { id: req.params.id } });
+      if (!query)                           return error(res, 404, "Query not found.");
       if (query.student_id !== req.user.id) return error(res, 403, "Not your query.");
-      if (query.status !== "AUTO_RESOLVED") {
-        return error(res, 400, "Only auto-resolved queries can be reactivated.");
-      }
+      if (query.status !== "AUTO_RESOLVED") return error(res, 400, "Only auto-resolved queries can be reactivated.");
 
       const updated = await prisma.query.update({
         where: { id: req.params.id },
-        data: {
-          status: "OPEN",
-          answer: null,
-          answered_at: null,
-        },
-        include: {
-          session: { select: { session_number: true, name: true } },
-        },
+        data:  { status: "OPEN", answer: null, answered_at: null },
+        include: { session: { select: { session_number: true, name: true } } },
       });
-
       return success(res, 200, "Query reactivated.", updated);
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 
-  // TUTOR: Get batch queries with priority sort
-  // GET /queries/batch/:batchId
   getBatchQueries: async (req, res, next) => {
     try {
-      const batch = await prisma.batch.findFirst({
-        where: { id: req.params.batchId, tutor_id: req.user.id },
-      });
+      const batch = await prisma.batch.findFirst({ where: { id: req.params.batchId, tutor_id: req.user.id } });
       if (!batch) return error(res, 403, "You do not own this batch.");
 
       const queries = await prisma.query.findMany({
-        where: { batch_id: req.params.batchId },
+        where:   { batch_id: req.params.batchId },
         orderBy: { created_at: "asc" },
         include: {
           student: { select: { name: true } },
@@ -475,93 +321,66 @@ const queryController = {
       });
 
       const now = Date.now();
-      const toAutoResolve = queries.filter(
-        (q) =>
-          q.status === "OPEN" &&
-          !q.answer &&
-          !q.is_reminded &&
-          now - new Date(q.created_at).getTime() > 36 * 3600 * 1000
+      const toAutoResolve = queries.filter(q =>
+        q.status === "OPEN" && !q.answer && !q.is_reminded &&
+        now - new Date(q.created_at).getTime() > 36 * 3600 * 1000
       );
-
       if (toAutoResolve.length > 0) {
         await prisma.query.updateMany({
-          where: { id: { in: toAutoResolve.map((q) => q.id) } },
-          data: { status: "AUTO_RESOLVED" },
+          where: { id: { in: toAutoResolve.map(q => q.id) } },
+          data:  { status: "AUTO_RESOLVED" },
         });
-        toAutoResolve.forEach((q) => {
-          q.status = "AUTO_RESOLVED";
-        });
+        toAutoResolve.forEach(q => { q.status = "AUTO_RESOLVED"; });
       }
 
-      const priority = (q) => {
+      const priority = q => {
         if (q.status === "RESOLVED" || q.status === "AUTO_RESOLVED") return 10;
-        if (q.answer) return 5;
+        if (q.answer)      return 5;
         if (q.is_reminded) return 0;
-
         const h = (now - new Date(q.created_at).getTime()) / 3600000;
         if (h >= 24) return 1;
         if (h >= 12) return 2;
-        if (h >= 6) return 3;
+        if (h >= 6)  return 3;
         return 4;
       };
 
       queries.sort((a, b) => {
-        const pa = priority(a);
-        const pb = priority(b);
+        const pa = priority(a), pb = priority(b);
         if (pa !== pb) return pa - pb;
         return new Date(a.created_at) - new Date(b.created_at);
       });
 
       return success(res, 200, "Batch queries.", queries);
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 
-  // TUTOR: Answer query with optional file attachment
-  // PATCH /queries/:id/answer
   answerQuery: async (req, res, next) => {
     try {
       const { answer: answerText } = req.body;
-
       if (!answerText) return error(res, 400, "Answer is required.");
 
-      const query = await prisma.query.findUnique({
-        where: { id: req.params.id },
-      });
+      const query = await prisma.query.findUnique({ where: { id: req.params.id } });
       if (!query) return error(res, 404, "Query not found.");
 
-      const batch = await prisma.batch.findFirst({
-        where: { id: query.batch_id, tutor_id: req.user.id },
-      });
-      if (!batch && req.user.role !== "ADMIN") {
-        return error(res, 403, "Not authorized.");
-      }
+      const batch = await prisma.batch.findFirst({ where: { id: query.batch_id, tutor_id: req.user.id } });
+      if (!batch && req.user.role !== "ADMIN") return error(res, 403, "Not authorized.");
 
       const updated = await prisma.query.update({
         where: { id: req.params.id },
         data: {
-          answer: answerText,
+          answer:       answerText,
           answer_media: req.file ? req.file.path : null,
-          answered_at: new Date(),
-          is_reminded: false,
+          answered_at:  new Date(),
+          is_reminded:  false,
         },
         include: {
           student: { select: { name: true } },
           session: { select: { session_number: true, name: true } },
         },
       });
-
       return success(res, 200, "Query answered.", updated);
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 };
 
-module.exports = {
-  getBatchSessions,
-  updateSession,
-  assignmentController,
-  queryController,
-};
+module.exports = { getBatchSessions, updateSession, assignmentController, queryController };
