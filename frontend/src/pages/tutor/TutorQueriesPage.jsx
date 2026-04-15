@@ -14,13 +14,15 @@ import { batchApi, queryApi } from "../../services/api.js";
 import { mediaUrl } from "../../services/api.js";
 import {
   HelpCircle, X, CheckCircle2, Flame, AlertTriangle,
-  Minus, PlayCircle, Send, RefreshCw,
+  Minus, PlayCircle, Send, RefreshCw, Bell,
 } from "lucide-react";
 
 const C = { dark:"#1F1A17", blue:"#024981", primary:"#007BBF", gray:"#6A6B6D", lg:"#9ca3af" };
 
 function getPriority(q) {
-  if (q.status === "RESOLVED") return "resolved";
+  if (q.status === "RESOLVED" || q.status === "AUTO_RESOLVED") return "resolved";
+  if (q.answer) return "answered";
+  if (q.is_reminded) return "reminded";  // Student reminded = needs immediate attention
   const h = (Date.now() - new Date(q.created_at).getTime()) / 3600000;
   if (h >= 48) return "ultra";
   if (h >= 24) return "high";
@@ -28,10 +30,12 @@ function getPriority(q) {
 }
 
 const PCFG = {
-  ultra:   { label:"Ultra High", bg:"#fef2f2", color:"#dc2626", border:"#fecaca", Icon:Flame,         sort:0 },
-  high:    { label:"High",       bg:"#fff7ed", color:"#ea580c", border:"#fed7aa", Icon:AlertTriangle,  sort:1 },
-  medium:  { label:"Medium",     bg:"#fefce8", color:"#ca8a04", border:"#fde68a", Icon:Minus,          sort:2 },
-  resolved:{ label:"Resolved",   bg:"#f0fdf4", color:"#16a34a", border:"#86efac", Icon:CheckCircle2,   sort:3 },
+  reminded: { label:"⚡ Reminded",  bg:"#fdf4ff", color:"#7c3aed", border:"#e9d5ff", Icon:Bell,          sort:0 },
+  ultra:    { label:"🔴 Ultra High", bg:"#fef2f2", color:"#dc2626", border:"#fecaca", Icon:Flame,         sort:1 },
+  high:     { label:"🟠 High",       bg:"#fff7ed", color:"#ea580c", border:"#fed7aa", Icon:AlertTriangle,  sort:2 },
+  medium:   { label:"🟡 Medium",     bg:"#fefce8", color:"#ca8a04", border:"#fde68a", Icon:Minus,          sort:3 },
+  answered: { label:"✓ Answered",   bg:"#eff8ff", color:"#007BBF", border:"#bfdbfe", Icon:CheckCircle2,   sort:4 },
+  resolved: { label:"✓ Resolved",   bg:"#f0fdf4", color:"#16a34a", border:"#86efac", Icon:CheckCircle2,   sort:5 },
 };
 
 function fmtRelative(iso) {

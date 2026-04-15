@@ -267,14 +267,12 @@ const assignmentController = {
 
 const queryController = {
 
-  // STUDENT: Ask a question
-  // POST /queries
+  // STUDENT: Ask a question (with optional media)
   createQuery: async (req, res, next) => {
     try {
       const { batch_id, session_id, question } = req.body;
-      if (!batch_id || !question) {
+      if (!batch_id || !question)
         return error(res, 400, "batch_id and question are required.");
-      }
 
       const enrolled = await prisma.enrollment.findFirst({
         where: { student_id: req.user.id, batch_id },
@@ -289,16 +287,13 @@ const queryController = {
           question,
           media_url: req.file ? req.file.path : null,
         },
+        include: { session: { select: { session_number: true, name: true } } },
       });
-
       return success(res, 201, "Query submitted.", query);
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 
-  // STUDENT: Get my queries
-  // GET /queries/mine?batch_id=xxx
+  // STUDENT: Get my queries (sorted by priority: open unanswered oldest first, then answered, then resolved)
   getMyQueries: async (req, res, next) => {
     try {
       const queries = await prisma.query.findMany({
@@ -306,17 +301,78 @@ const queryController = {
           student_id: req.user.id,
           ...(req.query.batch_id && { batch_id: req.query.batch_id }),
         },
-        orderBy: { created_at: "desc" },
+        orderBy: { created_at: "asc" },
         include: { session: { select: { session_number: true, name: true } } },
       });
+
+      // Auto-resolve: if tutor answered 24h+ ago and student hasn't resolved
+      const now = Date.now();
+      const toAutoResolve = queries.filter(q =>
+        q.answer && q.answered_at && q.status === "OPEN" &&
+        (now - new Date(q.answered_at).getTime()) > 24 * 3600 * 1000
+      );
+      if (toAutoResolve.length > 0) {
+        await prisma.query.updateMany({
+          where: { id: { in: toAutoResolve.map(q => q.id) } },
+          data:  { status: "AUTO_RESOLVED" },
+        });
+        toAutoResolve.forEach(q => q.status = "AUTO_RESOLVED");
+      }
+
+      // Sort: OPEN unanswered first (oldest), then answered, then resolved
+      queries.sort((a, b) => {
+        const rankA = a.status !== "OPEN" && a.status !== "AUTO_RESOLVED" ? 2
+          : a.answer ? 1 : 0;
+        const rankB = b.status !== "OPEN" && b.status !== "AUTO_RESOLVED" ? 2
+          : b.answer ? 1 : 0;
+        if (rankA !== rankB) return rankA - rankB;
+        return new Date(a.created_at) - new Date(b.created_at);
+      });
+
       return success(res, 200, "Your queries.", queries);
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 
-  // TUTOR: Get queries for my batch
-  // GET /queries/batch/:batchId
+  // STUDENT: Remind tutor about unanswered query
+  remindTutor: async (req, res, next) => {
+    try {
+      const query = await prisma.query.findUnique({ where: { id: req.params.id } });
+      if (!query) return error(res, 404, "Query not found.");
+      if (query.student_id !== req.user.id) return error(res, 403, "Not your query.");
+      if (query.answer) return error(res, 400, "Query already answered.");
+
+      // Allow remind only once per 2 hours
+      if (query.reminded_at) {
+        const hrs = (Date.now() - new Date(query.reminded_at).getTime()) / 3600000;
+        if (hrs < 2) return error(res, 429, "You can remind again after 2 hours.");
+      }
+
+      const updated = await prisma.query.update({
+        where: { id: req.params.id },
+        data:  { is_reminded: true, reminded_at: new Date() },
+        include: { session: { select: { session_number: true, name: true } } },
+      });
+      return success(res, 200, "Tutor reminded.", updated);
+    } catch (err) { next(err); }
+  },
+
+  // STUDENT: Mark own query resolved
+  resolveQuery: async (req, res, next) => {
+    try {
+      const query = await prisma.query.findUnique({ where: { id: req.params.id } });
+      if (!query) return error(res, 404, "Query not found.");
+      if (query.student_id !== req.user.id) return error(res, 403, "Not your query.");
+
+      const updated = await prisma.query.update({
+        where: { id: req.params.id },
+        data:  { status: "RESOLVED" },
+        include: { session: { select: { session_number: true, name: true } } },
+      });
+      return success(res, 200, "Query resolved.", updated);
+    } catch (err) { next(err); }
+  },
+
+  // TUTOR: Get queries for my batch — priority sorted
   getBatchQueries: async (req, res, next) => {
     try {
       const batch = await prisma.batch.findFirst({
@@ -326,66 +382,73 @@ const queryController = {
 
       const queries = await prisma.query.findMany({
         where:   { batch_id: req.params.batchId },
-        orderBy: { created_at: "desc" },
+        orderBy: { created_at: "asc" },
         include: {
           student: { select: { name: true } },
           session: { select: { session_number: true, name: true } },
         },
       });
+
+      // Auto-resolve answered queries older than 24h
+      const now = Date.now();
+      const toAutoResolve = queries.filter(q =>
+        q.answer && q.answered_at && q.status === "OPEN" &&
+        (now - new Date(q.answered_at).getTime()) > 24 * 3600 * 1000
+      );
+      if (toAutoResolve.length > 0) {
+        await prisma.query.updateMany({
+          where: { id: { in: toAutoResolve.map(q => q.id) } },
+          data:  { status: "AUTO_RESOLVED" },
+        });
+        toAutoResolve.forEach(q => q.status = "AUTO_RESOLVED");
+      }
+
+      // Priority sort: reminded > 48h+ unanswered > 24h+ unanswered > recent unanswered > answered > resolved
+      queries.sort((a, b) => {
+        const priority = (q) => {
+          if (q.status === "RESOLVED" || q.status === "AUTO_RESOLVED") return 10;
+          if (q.answer) return 5;
+          if (q.is_reminded) return 0; // reminded = top priority
+          const h = (now - new Date(q.created_at).getTime()) / 3600000;
+          if (h >= 48) return 1;
+          if (h >= 24) return 2;
+          return 3;
+        };
+        const pa = priority(a), pb = priority(b);
+        if (pa !== pb) return pa - pb;
+        return new Date(a.created_at) - new Date(b.created_at);
+      });
+
       return success(res, 200, "Batch queries.", queries);
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 
-  // TUTOR: Answer a query
-  // PATCH /queries/:id/answer
+  // TUTOR: Answer a query (status stays OPEN — student must resolve)
   answerQuery: async (req, res, next) => {
     try {
       const { answer } = req.body;
       if (!answer) return error(res, 400, "Answer is required.");
 
-      const query = await prisma.query.findUnique({
-        where:   { id: req.params.id },
-        include: { session: { include: { batch: { select: { tutor_id: true } } } } },
-      });
-
+      const query = await prisma.query.findUnique({ where: { id: req.params.id } });
       if (!query) return error(res, 404, "Query not found.");
 
-      // Allow tutor of the batch to answer
       const batch = await prisma.batch.findFirst({
         where: { id: query.batch_id, tutor_id: req.user.id },
       });
-      if (!batch && req.user.role !== "ADMIN") {
+      if (!batch && req.user.role !== "ADMIN")
         return error(res, 403, "Not authorized to answer this query.");
-      }
 
       const updated = await prisma.query.update({
         where: { id: req.params.id },
-        data: { answer, status: "RESOLVED", answered_at: new Date() },
+        // Keep status OPEN — only student resolves. Auto-resolve happens after 24h.
+        data: { answer, answered_at: new Date(), is_reminded: false },
+        include: {
+          student: { select: { name: true } },
+          session: { select: { session_number: true, name: true } },
+        },
       });
-
       return success(res, 200, "Query answered.", updated);
-    } catch (err) {
-      next(err);
-    }
-  },
-
-  // STUDENT: Mark own query as resolved
-  resolveQuery: async (req, res, next) => {
-    try {
-      const query = await prisma.query.findUnique({ where: { id: req.params.id } });
-      if (!query) return error(res, 404, "Query not found.");
-      if (query.student_id !== req.user.id) return error(res, 403, "Not your query.");
-
-      const updated = await prisma.query.update({
-        where: { id: req.params.id },
-        data: { status: "RESOLVED" },
-      });
-      return success(res, 200, "Query marked resolved.", updated);
-    } catch (err) {
-      next(err);
-    }
+    } catch (err) { next(err); }
   },
 };
 

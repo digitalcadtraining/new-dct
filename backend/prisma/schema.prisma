@@ -277,6 +277,8 @@ model Query {
   media_url   String?
   answer      String?
   status      QueryStatus       @default(OPEN)
+  is_reminded Boolean           @default(false)
+  reminded_at DateTime?
   created_at  DateTime          @default(now())
   answered_at DateTime?
 
