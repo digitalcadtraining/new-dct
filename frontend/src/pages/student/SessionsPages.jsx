@@ -505,55 +505,43 @@ function SessionCard({
           }}
         >
           {/* Assignment button — enabled only if tutor uploaded one */}
-          {assignment ? (
-            <a
-              href={
-                assignment.file_url ? mediaUrl(assignment.file_url) : undefined
-              }
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={
-                !assignment.file_url ? (e) => e.preventDefault() : undefined
-              }
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "9px 11px",
-                background: "#f0fdf4",
-                border: "1px solid #86efac",
-                borderRadius: 8,
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#16a34a",
-                cursor: "pointer",
-                textDecoration: "none",
-              }}
-            >
-              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <FileText size={12} /> Check Assignment
-              </span>
-              <ChevronRight size={12} />
-            </a>
-          ) : (
-            <button
-              disabled
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "9px 11px",
-                background: "#f9fafb",
-                border: "1px solid #e5e7eb",
-                borderRadius: 8,
-                fontSize: 11,
-                fontWeight: 600,
-                color: C.lg,
-                cursor: "not-allowed",
-                opacity: 0.7,
-              }}
-            >
-              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {assignment ? (() => {
+            const sub = assignment.submissions?.[0];
+            const isReviewed  = sub?.status === "REVIEWED";
+            const isSubmitted = sub?.status === "SUBMITTED" || isReviewed;
+            return (
+              <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+                <a
+                  href={assignment.file_url ? mediaUrl(assignment.file_url) : undefined}
+                  target="_blank" rel="noopener noreferrer"
+                  onClick={!assignment.file_url ? (e) => e.preventDefault() : undefined}
+                  style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+                    padding:"9px 11px", background:"#f0fdf4", border:"1px solid #86efac",
+                    borderRadius:8, fontSize:11, fontWeight:700, color:"#16a34a",
+                    cursor:"pointer", textDecoration:"none" }}>
+                  <span style={{ display:"flex", alignItems:"center", gap:4 }}>
+                    <FileText size={12} /> Check Assignment
+                  </span>
+                  <ChevronRight size={12} />
+                </a>
+                {isSubmitted && (
+                  <div style={{ display:"flex", justifyContent:"flex-end" }}>
+                    <span style={{ fontSize:9, fontWeight:800, padding:"2px 8px", borderRadius:999,
+                      background: isReviewed ? "#f5f3ff" : "#f0fdf4",
+                      color: isReviewed ? "#7c3aed" : "#16a34a" }}>
+                      {isReviewed ? "★ Reviewed" : "✓ Submitted"}
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })() : (
+            <button disabled
+              style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+                padding:"9px 11px", background:"#f9fafb", border:"1px solid #e5e7eb",
+                borderRadius:8, fontSize:11, fontWeight:600, color:C.lg,
+                cursor:"not-allowed", opacity:0.7 }}>
+              <span style={{ display:"flex", alignItems:"center", gap:4 }}>
                 <FileText size={12} /> Not Uploaded Yet
               </span>
             </button>
@@ -712,13 +700,8 @@ function BatchSelectorCard({ batch, selected, onClick }) {
   const end = batch.end_date ? new Date(batch.end_date) : null;
   let batchStatus = "Upcoming";
   if (start && end) {
-    if (now < start) {
-      batchStatus = "Upcoming";
-    } else if (now >= start && now < end) {
-      batchStatus = "Active";
-    } else {
-      batchStatus = "Completed";
-    }
+    if (now >= start && now <= end) batchStatus = "Active";
+    else if (now > end) batchStatus = "Completed";
   }
   const startStr = start
     ? start.toLocaleDateString("en-IN", {

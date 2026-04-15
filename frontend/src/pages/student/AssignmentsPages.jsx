@@ -8,12 +8,12 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import AppShell from "../../components/layout/AppShell.jsx";
 import { PageWrapper } from "../../components/ui/index.jsx";
 import { motion, AnimatePresence } from "framer-motion";
-import { batchApi, assignmentApi } from "../../services/api.js";
+import { batchApi, assignmentApi, queryApi } from "../../services/api.js";
 import { mediaUrl } from "../../services/api.js";
 import {
   FileText, Upload, X, Download, CheckCircle2,
   AlertCircle, RefreshCw, ExternalLink,
-  BookOpen, Star, ChevronDown,
+  BookOpen, Star, ChevronDown, HelpCircle,
 } from "lucide-react";
 
 const C = { dark:"#1F1A17", blue:"#024981", primary:"#007BBF", gray:"#6A6B6D", lg:"#9ca3af" };
@@ -217,7 +217,7 @@ function SubmitSheet({ assignment, onClose, onSubmitted }) {
 }
 
 /* ─── Feedback Sheet ─────────────────────────────────────── */
-function FeedbackSheet({ assignment, submission, onClose }) {
+function FeedbackSheet({ assignment, submission, onClose, onRaiseQuery }) {
   if (!submission || !assignment) return null;
   return (
     <BottomSheet onClose={onClose}>
@@ -283,6 +283,21 @@ function FeedbackSheet({ assignment, submission, onClose }) {
             No written feedback yet.
           </p>
         )}
+
+        {/* Raise Query about this assignment */}
+        <div style={{ marginTop:20, paddingTop:16, borderTop:"1px solid #f0f0f0" }}>
+          <p style={{ fontSize:12, color:C.lg, marginBottom:10, textAlign:"center" }}>
+            Still have doubts about this assignment?
+          </p>
+          <button onClick={() => { onClose(); onRaiseQuery && onRaiseQuery(assignment); }}
+            style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"center",
+              gap:8, padding:"12px 0",
+              background:"linear-gradient(135deg,#007BBF,#024981)",
+              color:"#fff", border:"none", borderRadius:12,
+              fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
+            <HelpCircle size={14}/> Raise Assignment Query
+          </button>
+        </div>
       </div>
     </BottomSheet>
   );
@@ -448,11 +463,110 @@ function useBatchAssignments() {
     refresh: () => setRefresh(t => t+1) };
 }
 
+/* ─── Assignment Query Modal ─────────────────────────────── */
+function AssignmentQueryModal({ assignment, batches, selectedBatch, onClose, onSubmitted }) {
+  const [question, setQuestion] = useState("");
+  const [loading,  setLoading]  = useState(false);
+  const [err,      setErr]      = useState("");
+
+  const sessionLabel = assignment?.session
+    ? `Session ${assignment.session.session_number}: ${assignment.session.name}`
+    : assignment?.title || "Assignment";
+
+  const prefill = `[Assignment Query — ${sessionLabel}]\n`;
+
+  const handleSubmit = async () => {
+    if (!question.trim()) return setErr("Please describe your doubt.");
+    setLoading(true); setErr("");
+    try {
+      await queryApi.create({
+        batch_id:   selectedBatch?.id || batches?.[0]?.id,
+        session_id: assignment?.session_id || undefined,
+        question:   `${prefill}${question.trim()}`,
+      });
+      onSubmitted?.();
+      onClose();
+    } catch(e) { setErr(e.message || "Failed to submit."); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, zIndex:70, display:"flex",
+      alignItems:"center", justifyContent:"center", padding:16 }}>
+      <motion.div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.55)",
+        backdropFilter:"blur(3px)" }}
+        initial={{ opacity:0 }} animate={{ opacity:1 }} onClick={onClose}/>
+      <motion.div style={{ position:"relative", background:"#fff", borderRadius:20,
+        width:"100%", maxWidth:440, zIndex:10, padding:24,
+        boxShadow:"0 24px 64px rgba(0,0,0,0.2)", maxHeight:"90vh", overflowY:"auto" }}
+        initial={{ opacity:0, scale:0.95, y:16 }} animate={{ opacity:1, scale:1, y:0 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ width:32, height:32, borderRadius:10,
+              background:`linear-gradient(135deg,${C.blue},${C.primary})`,
+              display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <HelpCircle size={15} style={{ color:"#fff" }}/>
+            </div>
+            <div>
+              <p style={{ fontSize:15, fontWeight:800, color:C.dark }}>Assignment Query</p>
+              <p style={{ fontSize:11, color:C.lg }}>{sessionLabel}</p>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ width:30, height:30, borderRadius:8,
+            border:"none", background:"#f3f4f6", cursor:"pointer",
+            display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <X size={14} style={{ color:C.gray }}/>
+          </button>
+        </div>
+
+        <div style={{ background:"#eff8ff", borderRadius:12, padding:"10px 13px", marginBottom:14,
+          fontSize:12, color:C.blue, fontWeight:600 }}>
+          📌 {prefill.trim()}
+        </div>
+
+        <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.gray,
+          marginBottom:6, textTransform:"uppercase", letterSpacing:"0.5px" }}>
+          Your Doubt *
+        </label>
+        <textarea value={question} onChange={e=>setQuestion(e.target.value)}
+          placeholder="What's unclear about this assignment? What are you stuck on?"
+          rows={4}
+          style={{ width:"100%", padding:"11px 13px", border:"1.5px solid #e5e7eb",
+            borderRadius:12, fontSize:13, resize:"none", outline:"none",
+            fontFamily:"inherit", lineHeight:1.6, boxSizing:"border-box",
+            color:C.dark, marginBottom:10 }}
+          onFocus={e=>e.target.style.borderColor=C.primary}
+          onBlur={e=>e.target.style.borderColor="#e5e7eb"}/>
+
+        {err && (
+          <div style={{ padding:"9px 12px", background:"#fef2f2", borderRadius:10,
+            fontSize:12, color:"#dc2626", marginBottom:10 }}>{err}</div>
+        )}
+
+        <button onClick={handleSubmit} disabled={loading||!question.trim()}
+          style={{ width:"100%", padding:"13px 0",
+            background: !question.trim()?"#e5e7eb":`linear-gradient(135deg,${C.blue},${C.primary})`,
+            color: !question.trim()?C.lg:"#fff", border:"none", borderRadius:12,
+            fontSize:14, fontWeight:800, cursor:!question.trim()?"not-allowed":"pointer",
+            fontFamily:"inherit", display:"flex", alignItems:"center",
+            justifyContent:"center", gap:8 }}>
+          {loading
+            ? <><RefreshCw size={14} style={{ animation:"spin 1s linear infinite" }}/> Sending…</>
+            : <><HelpCircle size={14}/> Send Query to Tutor</>}
+        </button>
+      </motion.div>
+      <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+}
+
+
 /* ═══════════════ ALL ASSIGNMENTS PAGE ═══════════════ */
 export function AllAssignmentsPage() {
   const { batches, selected, setSelected, assignments, loading, refresh } = useBatchAssignments();
   const [submitSheet,   setSubmitSheet]   = useState(null);
-  const [feedbackSheet, setFeedbackSheet] = useState(null);
+  const [feedbackSheet,     setFeedbackSheet]     = useState(null);
+  const [raiseQueryAssign,  setRaiseQueryAssign]  = useState(null); // assignment to raise query about
   const [toast,         setToast]         = useState(null);
   const [filter, setFilter] = useState("ALL");
 
@@ -559,7 +673,16 @@ export function AllAssignmentsPage() {
           {feedbackSheet && (
             <FeedbackSheet assignment={feedbackSheet.assignment}
               submission={feedbackSheet.submission}
-              onClose={()=>setFeedbackSheet(null)}/>
+              onClose={()=>setFeedbackSheet(null)}
+              onRaiseQuery={(a)=>{ setFeedbackSheet(null); setRaiseQueryAssign(a); }}/>
+          )}
+          {raiseQueryAssign && (
+            <AssignmentQueryModal
+              assignment={raiseQueryAssign}
+              batches={batches}
+              selectedBatch={selected}
+              onClose={()=>setRaiseQueryAssign(null)}
+              onSubmitted={()=>{ setRaiseQueryAssign(null); setToast({msg:"Query sent to tutor!",type:"success"}); }}/>
           )}
           {toast && <Toast key={toast.msg} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
         </AnimatePresence>
@@ -619,7 +742,16 @@ export function AssignmentFeedbackPage() {
           {feedbackSheet && (
             <FeedbackSheet assignment={feedbackSheet.assignment}
               submission={feedbackSheet.submission}
-              onClose={()=>setFeedbackSheet(null)}/>
+              onClose={()=>setFeedbackSheet(null)}
+              onRaiseQuery={(a)=>{ setFeedbackSheet(null); setRaiseQueryAssign(a); }}/>
+          )}
+          {raiseQueryAssign && (
+            <AssignmentQueryModal
+              assignment={raiseQueryAssign}
+              batches={batches}
+              selectedBatch={selected}
+              onClose={()=>setRaiseQueryAssign(null)}
+              onSubmitted={()=>{ setRaiseQueryAssign(null); setToast({msg:"Query sent to tutor!",type:"success"}); }}/>
           )}
         </AnimatePresence>
       </PageWrapper>

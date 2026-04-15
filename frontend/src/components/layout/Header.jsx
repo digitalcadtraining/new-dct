@@ -46,13 +46,15 @@ export default function Header({ onMenuToggle }) {
       </div>
 
       <div className="flex items-center gap-3">
-        {user && (
-          <div className="hidden sm:flex items-center gap-2 text-sm font-semibold text-dct-dark">
+        {isDashboard && (
+          <a href="tel:+917977508768"
+            className="hidden sm:flex items-center gap-2 text-sm font-semibold text-dct-dark hover:text-dct-primary transition-colors"
+            title="Contact DCT Institute">
             <div className="w-8 h-8 rounded-full bg-dct-primary/10 flex items-center justify-center">
               <Phone size={14} className="text-dct-primary" />
             </div>
-            <span>{user.phone || ""}</span>
-          </div>
+            <span>+91 79 7750 8768</span>
+          </a>
         )}
 
         <div className="relative" ref={ref}>
