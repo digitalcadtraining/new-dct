@@ -81,7 +81,7 @@ model User {
 
   enrollments       Enrollment[]
   tutor_application TutorApplication?
-  tutor_batches     Batch[]            @relation("TutorBatches")
+  tutor_batches     Batch[]                @relation("TutorBatches")
   submissions       AssignmentSubmission[]
   queries           Query[]
   refresh_tokens    RefreshToken[]
@@ -125,26 +125,26 @@ model Course {
 }
 
 model TutorApplication {
-  id              String @id @default(cuid())
-  name            String
-  email           String
-  phone           String
-  occupation      String
-  years_exp       Int
-  companies       String
-  work_experience String
-  course_id       String
-  course          Course @relation(fields: [course_id], references: [id])
-  time_slots      Json   @default("[]")
-  hide_identity   Boolean           @default(false)
-  location        String
-  languages       Json              @default("[]")
-  status          ApplicationStatus @default(PENDING)
-  applied_on      DateTime          @default(now())
-  reviewed_on     DateTime?
-  rejection_note  String?
-  user_id         String?           @unique
-  user            User?             @relation(fields: [user_id], references: [id])
+  id                String             @id @default(cuid())
+  name              String
+  email             String
+  phone             String
+  occupation        String
+  years_exp         Int
+  companies         String
+  work_experience   String
+  course_id         String
+  course            Course             @relation(fields: [course_id], references: [id])
+  time_slots        Json               @default("[]")
+  hide_identity     Boolean            @default(false)
+  location          String
+  languages         Json               @default("[]")
+  status            ApplicationStatus  @default(PENDING)
+  applied_on        DateTime           @default(now())
+  reviewed_on       DateTime?
+  rejection_note    String?
+  user_id           String?            @unique
+  user              User?              @relation(fields: [user_id], references: [id])
   syllabus_sessions SyllabusTemplate[]
   syllabus_projects SyllabusProject[]
 
@@ -192,6 +192,7 @@ model Batch {
   enrollments        Enrollment[]
   scheduled_sessions ScheduledSession[]
   assignments        Assignment[]
+  queries            Query[]
 
   @@map("batches")
 }
@@ -233,16 +234,16 @@ model ScheduledSession {
 }
 
 model Assignment {
-  id          String           @id @default(cuid())
+  id          String            @id @default(cuid())
   batch_id    String
-  batch       Batch            @relation(fields: [batch_id], references: [id])
+  batch       Batch             @relation(fields: [batch_id], references: [id])
   session_id  String?
   session     ScheduledSession? @relation(fields: [session_id], references: [id])
   title       String
   description String?
   file_url    String?
   due_date    DateTime?
-  created_at  DateTime         @default(now())
+  created_at  DateTime          @default(now())
 
   submissions AssignmentSubmission[]
 
@@ -267,20 +268,22 @@ model AssignmentSubmission {
 }
 
 model Query {
-  id          String            @id @default(cuid())
-  student_id  String
-  student     User              @relation(fields: [student_id], references: [id])
-  session_id  String?
-  session     ScheduledSession? @relation(fields: [session_id], references: [id])
-  batch_id    String
-  question    String
-  media_url   String?
-  answer      String?
-  status      QueryStatus       @default(OPEN)
-  is_reminded Boolean           @default(false)
-  reminded_at DateTime?
-  created_at  DateTime          @default(now())
-  answered_at DateTime?
+  id           String            @id @default(cuid())
+  student_id   String
+  student      User              @relation(fields: [student_id], references: [id])
+  session_id   String?
+  session      ScheduledSession? @relation(fields: [session_id], references: [id])
+  batch_id     String
+  batch        Batch             @relation(fields: [batch_id], references: [id])
+  question     String
+  media_url    String?
+  answer       String?
+  answer_media String?
+  status       QueryStatus       @default(OPEN)
+  is_reminded  Boolean           @default(false)
+  reminded_at  DateTime?
+  created_at   DateTime          @default(now())
+  answered_at  DateTime?
 
   @@map("queries")
 }
