@@ -180,10 +180,18 @@ const registerStudent = async (req, res, next) => {
     // Issue tokens
     const tokens = await generateTokens(user);
 
+    // Set refresh token as httpOnly cookie (same as login)
+    res.cookie("refresh_token", tokens.refreshToken, {
+      httpOnly: true,
+      secure:   process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge:   7 * 24 * 60 * 60 * 1000,
+    });
+
     return success(res, 201, "Account created successfully.", {
       user,
-      batch_name: batch.name,
-      ...tokens,
+      batch_name:   batch.name,
+      access_token: tokens.accessToken,  // consistent with login response
     });
   } catch (err) {
     next(err);

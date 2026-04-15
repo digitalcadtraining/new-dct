@@ -2,7 +2,6 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 
 export default function ProtectedRoute({ children, roles }) {
-  // Check both React state AND localStorage (handles timing issue on navigate)
   const { user: ctxUser } = useAuth();
   const user = ctxUser || (() => {
     try { return JSON.parse(localStorage.getItem("dct_user")); } catch { return null; }
@@ -16,7 +15,7 @@ export default function ProtectedRoute({ children, roles }) {
   if (allowedRoles && !allowedRoles.includes(userRole)) {
     const redirects = {
       STUDENT: "/student/courses",
-      TUTOR:   "/tutor/dashboard",
+      TUTOR:   "/tutor/batches",
       ADMIN:   "/admin/dashboard",
     };
     return <Navigate to={redirects[userRole] || "/auth/login"} replace />;
