@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api/v1";
+const BASE    = import.meta.env.VITE_API_URL || "http://localhost:5000/api/v1";
 const BACKEND = BASE.replace(/\/api\/v1$/, ""); // e.g. http://localhost:5000
 
 /**
@@ -37,10 +37,7 @@ async function http(path, opts = {}, retry = true) {
 
   if (res.status === 401 && retry && !isAuthRoute(path)) {
     try {
-      const refreshRes = await fetch(`${BASE}/auth/refresh`, {
-        method: "POST",
-        credentials: "include",
-      });
+      const refreshRes  = await fetch(`${BASE}/auth/refresh`, { method: "POST", credentials: "include" });
       const refreshData = await refreshRes.json();
       if (refreshData.data?.access_token) {
         localStorage.setItem("dct_access_token", refreshData.data.access_token);
@@ -72,65 +69,39 @@ function httpFile(path, method, formData) {
     credentials: "include",
     headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: formData,
-  })
-    .then((r) => r.json())
-    .then((d) => {
-      if (!d.success && d.message) throw new Error(d.message);
-      return d;
-    });
+  }).then(r => r.json()).then(d => { if (!d.success && d.message) throw new Error(d.message); return d; });
 }
 
 export const authApi = {
-  sendOtp: (phone, purpose) =>
-    http("/auth/otp/send", {
-      method: "POST",
-      body: JSON.stringify({ phone, purpose }),
-    }),
-  verifyOtp: (phone, otp, purpose) =>
-    http("/auth/otp/verify", {
-      method: "POST",
-      body: JSON.stringify({ phone, otp, purpose }),
-    }),
-  register: (data) =>
-    http("/auth/register", { method: "POST", body: JSON.stringify(data) }),
-  login: (email_or_phone, password) =>
-    http("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email_or_phone, password }),
-    }),
-  adminLogin: (email, password) =>
-    http("/auth/admin/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    }),
-  logout: () => http("/auth/logout", { method: "POST" }),
-  me: () => http("/auth/me"),
+  sendOtp:    (phone, purpose)           => http("/auth/otp/send",    { method:"POST", body:JSON.stringify({ phone, purpose }) }),
+  verifyOtp:  (phone, otp, purpose)      => http("/auth/otp/verify",  { method:"POST", body:JSON.stringify({ phone, otp, purpose }) }),
+  register:   (data)                     => http("/auth/register",    { method:"POST", body:JSON.stringify(data) }),
+  login:      (email_or_phone, password) => http("/auth/login",       { method:"POST", body:JSON.stringify({ email_or_phone, password }) }),
+  adminLogin: (email, password)          => http("/auth/admin/login", { method:"POST", body:JSON.stringify({ email, password }) }),
+  logout:     ()                         => http("/auth/logout",      { method:"POST" }),
+  me:         ()                         => http("/auth/me"),
 };
 
 export const courseApi = {
-  list: () => http("/courses"),
+  list:       ()         => http("/courses"),
   getBatches: (courseId) => http(`/courses/${courseId}/batches`),
 };
 
 export const tutorApi = {
-  apply: (data) =>
-    http("/tutor-applications", { method: "POST", body: JSON.stringify(data) }),
+  apply:       (data)  => http("/tutor-applications", { method:"POST", body:JSON.stringify(data) }),
   checkStatus: (phone) => http(`/tutor-applications/status?phone=${phone}`),
 };
 
 export const batchApi = {
-  enrolled: () => http("/batches/enrolled"),
-  mine: () => http("/batches/mine"),
-  create: (data) =>
-    http("/batches", { method: "POST", body: JSON.stringify(data) }),
-  get: (id) => http(`/batches/${id}`),
+  enrolled: ()     => http("/batches/enrolled"),
+  mine:     ()     => http("/batches/mine"),
+  create:   (data) => http("/batches", { method:"POST", body:JSON.stringify(data) }),
+  get:      (id)   => http(`/batches/${id}`),
 };
 
 export const sessionApi = {
-  getForBatch: (batchId, status) =>
-    http(`/sessions/batch/${batchId}${status ? `?status=${status}` : ""}`),
-  update: (id, data) =>
-    http(`/sessions/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  getForBatch: (batchId, status) => http(`/sessions/batch/${batchId}${status ? `?status=${status}` : ""}`),
+  update:      (id, data)        => http(`/sessions/${id}`, { method:"PATCH", body:JSON.stringify(data) }),
 };
 
 export const assignmentApi = {
@@ -146,79 +117,69 @@ export const assignmentApi = {
   create: (data, file) => {
     const fd = new FormData();
     fd.append("batch_id", data.batch_id);
-    fd.append("title", data.title);
-    if (data.session_id) fd.append("session_id", data.session_id);
+    fd.append("title",    data.title);
+    if (data.session_id)  fd.append("session_id",  data.session_id);
     if (data.description) fd.append("description", data.description);
-    if (data.due_date) fd.append("due_date", data.due_date);
-    if (file) fd.append("file", file);
+    if (data.due_date)    fd.append("due_date",     data.due_date);
+    if (file)             fd.append("file", file);
     return httpFile("/assignments", "POST", fd);
   },
   review: (submissionId, data) =>
-    http(`/assignments/submissions/${submissionId}/review`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    }),
+    http(`/assignments/submissions/${submissionId}/review`, { method:"PATCH", body:JSON.stringify(data) }),
 };
 
 export const queryApi = {
   // Student
-  mine: (batchId) =>
-    http(`/queries/mine${batchId ? `?batch_id=${batchId}` : ""}`),
-  create: (data, mediaFile) => {
+  mine:           (batchId) => http(`/queries/mine${batchId ? `?batch_id=${batchId}` : ""}`),
+  create:         (data, mediaFile) => {
     const fd = new FormData();
     fd.append("batch_id", data.batch_id);
     fd.append("question", data.question);
     if (data.session_id) fd.append("session_id", data.session_id);
-    if (mediaFile) fd.append("media", mediaFile);
+    if (mediaFile)       fd.append("media", mediaFile);
     return httpFile("/queries", "POST", fd);
   },
-  resolve: (id) => http(`/queries/${id}/resolve`, { method: "PATCH" }),
-  remindTutor: (id) => http(`/queries/${id}/remind`, { method: "PATCH" }),
+  resolve:        (id) => http(`/queries/${id}/resolve`,    { method:"PATCH" }),
+  remindTutor:    (id) => http(`/queries/${id}/remind`,     { method:"PATCH" }),
+  reactivate:     (id) => http(`/queries/${id}/reactivate`, { method:"PATCH" }),
   // Tutor
   getBatchQueries: (batchId) => http(`/queries/batch/${batchId}`),
-  answer: (id, answer) =>
-    http(`/queries/${id}/answer`, {
-      method: "PATCH",
-      body: JSON.stringify({ answer }),
-    }),
+  answer:          (id, answer, attachmentFile) => {
+    if (attachmentFile) {
+      const fd = new FormData();
+      fd.append("answer", answer);
+      fd.append("attachment", attachmentFile);
+      return httpFile(`/queries/${id}/answer`, "PATCH", fd);
+    }
+    return http(`/queries/${id}/answer`, { method:"PATCH", body:JSON.stringify({ answer }) });
+  },
 };
 
 export const adminApi = {
-  stats: () => http("/admin/stats"),
-  applications: (status) =>
-    http(`/admin/applications${status ? `?status=${status}` : ""}`),
-  approveApp: (id) =>
-    http(`/admin/applications/${id}/approve`, { method: "POST" }),
-  rejectApp: (id, note) =>
-    http(`/admin/applications/${id}/reject`, {
-      method: "POST",
-      body: JSON.stringify({ rejection_note: note }),
-    }),
-  students: (search, page, pageSize) => {
+  stats:            ()                       => http("/admin/stats"),
+  applications:     (status)                 => http(`/admin/applications${status ? `?status=${status}` : ""}`),
+  approveApp:       (id)                     => http(`/admin/applications/${id}/approve`, { method:"POST" }),
+  rejectApp:        (id, note)               => http(`/admin/applications/${id}/reject`,  { method:"POST", body:JSON.stringify({ rejection_note: note }) }),
+  students:         (search, page, pageSize) => {
     const params = new URLSearchParams();
-    if (search) params.set("search", search);
-    if (page) params.set("page", page);
+    if (search)   params.set("search",   search);
+    if (page)     params.set("page",     page);
     if (pageSize) params.set("pageSize", pageSize);
     const qs = params.toString();
     return http(`/admin/students${qs ? `?${qs}` : ""}`);
   },
-  tutors: () => http("/admin/tutors"),
-  batches: (status) =>
-    http(`/admin/batches${status ? `?status=${status}` : ""}`),
-  approveBatch: (id) =>
-    http(`/admin/batches/${id}/approve`, { method: "POST" }),
-  rejectBatch: (id) => http(`/admin/batches/${id}/reject`, { method: "POST" }),
-  queries: (status) =>
-    http(`/admin/queries${status ? `?status=${status}` : ""}`),
-  resolveQuery: (id) =>
-    http(`/admin/queries/${id}/resolve`, { method: "PATCH" }),
-  toggleUserStatus: (id) =>
-    http(`/admin/users/${id}/status`, { method: "PATCH" }),
+  tutors:           ()                       => http("/admin/tutors"),
+  batches:          (status)                 => http(`/admin/batches${status ? `?status=${status}` : ""}`),
+  approveBatch:     (id)                     => http(`/admin/batches/${id}/approve`, { method:"POST" }),
+  rejectBatch:      (id)                     => http(`/admin/batches/${id}/reject`,  { method:"POST" }),
+  queries:          (status)                 => http(`/admin/queries${status ? `?status=${status}` : ""}`),
+  resolveQuery:     (id)                     => http(`/admin/queries/${id}/resolve`, { method:"PATCH" }),
+  toggleUserStatus: (id)                     => http(`/admin/users/${id}/status`,   { method:"PATCH" }),
 };
 
 export const api = {
-  get: (p) => http(p),
-  post: (p, b) => http(p, { method: "POST", body: JSON.stringify(b) }),
-  patch: (p, b) => http(p, { method: "PATCH", body: JSON.stringify(b) }),
-  delete: (p) => http(p, { method: "DELETE" }),
+  get:    (p)    => http(p),
+  post:   (p, b) => http(p, { method:"POST",   body:JSON.stringify(b) }),
+  patch:  (p, b) => http(p, { method:"PATCH",  body:JSON.stringify(b) }),
+  delete: (p)    => http(p, { method:"DELETE" }),
 };
